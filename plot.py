@@ -6,9 +6,11 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 import serial
 
-# import random
-# def dummy_read():
-#    return random.random() * 3
+DEBUG = 0
+
+import random
+def dummy_read():
+   return random.random() * 3
 
 def read_serial_data(ser):
     data = ser.readline().decode().strip()
@@ -17,11 +19,15 @@ def read_serial_data(ser):
 def update():
     global curve, data_x, data_y
     value = read_serial_data(ser)
-    # value = dummy_read()
-    print(value)
+
+    if DEBUG == 2:
+        value = dummy_read()
+    if DEBUG >= 1:
+        print(value)
 
     data_y = data_y[1:]  # Remove first element
     data_y.append(value)
+
     curve.setData(data_x, data_y)
 #------------------------------
 app = QtWidgets.QApplication([])
