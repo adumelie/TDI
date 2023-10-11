@@ -1,6 +1,7 @@
 # Real-time input plotting from ItsyBitsy serial data
 # Author: Alexis Dumelié
 #------------------------------
+import numpy as np
 import sys
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
@@ -10,6 +11,15 @@ from datetime import datetime
 DEBUG = 0
 LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
 LOGGING_DATA = []
+
+y_min = 0
+y_max = 3.3
+step = 10 # In ms
+N = step * 100
+
+TRIGGERED = False
+TIME_START = N * 1 # To not directly play sound before pressing
+THRESHOLD = 0.4
 
 #------------------------------
 import glob
@@ -48,8 +58,23 @@ def update():
     data_y = data_y[1:]  # Remove first element
     data_y.append(value)
 
+    trigger_event(data_y)
+
     LOGGING_DATA.append(value)
     curve.setData(data_x, data_y)
+
+#------------------------------
+from pydub import AudioSegment
+from pydub.playback import play
+def trigger_event(values):
+    global TRIGGERED
+    if not TRIGGERED:
+        if len(LOGGING_DATA) > TIME_START:
+            array = np.array(values)
+            if (array < THRESHOLD).all():
+                sound = AudioSegment.from_file('sound.wav', format='wav')
+                play(sound)
+                TRIGGERED = True
 #------------------------------
 app = QtWidgets.QApplication([])
 
@@ -58,9 +83,6 @@ win.setWindowTitle("Real-Time Data Plotting")
 win.closeEvent = on_close
 win.show()
 
-y_min = 0
-y_max = 3.3
-step = 10 # In ms
 
 plot = win.addPlot(title="Real-time data plot from sensor")
 plot.setYRange(y_min, y_max)
@@ -72,7 +94,7 @@ plot.setLabel(XAXIS, "Time (update " + str(step) +" ms)")
 plot.setTitle("Input data - FSR Glove")
 
 curve = plot.plot(pen=pg.mkPen(color='r'), width=15)
-data_x = [i for i in range(step * 100)]
+data_x = [i for i in range(N)]
 data_y = [0 for _ in data_x]
 
 ser = serial.Serial(port, 9600) 
