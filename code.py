@@ -1,5 +1,5 @@
 # Itsybitsy board cod (FSR TDI)
-# Author: Alexis Dumelie
+# Author: Alexis Dumelié
 
 import time
 import board
