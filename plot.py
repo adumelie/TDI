@@ -79,38 +79,44 @@ def trigger_event(values):
                 triggered()
                 TRIGGERED = True
 def triggered():
-    # time.sleep(60*3)
+    print("Detected !")
+    LOGGING_DATA.append("DETECTED")
+    time.sleep(60*3)
     sound = AudioSegment.from_file('sound.wav', format='wav')
+    play(sound)
+    time.sleep(60*5) # Time for dream, then wake up
+    sound = AudioSegment.from_file('sound2.wav', format='wav')
     play(sound)
 
 #------------------------------
-def setup():
-    app = QtWidgets.QApplication([])
+port = detect_tty()
+app = QtWidgets.QApplication([])
 
-    win = pg.GraphicsLayoutWidget()
-    win.setWindowTitle("Real-Time Data Plotting")
-    win.closeEvent = on_close
-    win.show()
+win = pg.GraphicsLayoutWidget()
+win.setWindowTitle("Real-Time Data Plotting")
+win.closeEvent = on_close
+win.show()
 
 
-    plot = win.addPlot(title="Real-time data plot from sensor")
-    plot.setYRange(y_min, y_max)
+plot = win.addPlot(title="Real-time data plot from sensor")
+plot.setYRange(y_min, y_max)
 
-    YAXIS = "left"
-    XAXIS = "bottom"
-    plot.setLabel(YAXIS, "Voltage")
-    plot.setLabel(XAXIS, "Time (update " + str(step) +" ms)")
-    plot.setTitle("Input data - FSR Glove")
+YAXIS = "left"
+XAXIS = "bottom"
+plot.setLabel(YAXIS, "Voltage")
+plot.setLabel(XAXIS, "Time (update " + str(step) +" ms)")
+plot.setTitle("Input data - FSR Glove")
 
-    curve = plot.plot(pen=pg.mkPen(color='r'), width=15)
-    data_x = [i for i in range(N)]
-    data_y = [0 for _ in data_x]
+curve = plot.plot(pen=pg.mkPen(color='r'), width=15)
+data_x = [i for i in range(N)]
+data_y = [0 for _ in data_x]
 
-    ser = serial.Serial(port, 9600) 
+ser = serial.Serial(port, 9600) 
 
-    timer = QtCore.QTimer()
-    timer.timeout.connect(update)
-    timer.start(step) 
+timer = QtCore.QTimer()
+timer.timeout.connect(update)
+timer.start(step) 
+
 #------------------------------
 DRY_RUN = False 
 if __name__ == '__main__':
@@ -118,6 +124,4 @@ if __name__ == '__main__':
         print("WARNING: DRY RUN")
         triggered()
     elif (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-        port = detect_tty()
-        app = setup()
         sys.exit(app.exec_())
