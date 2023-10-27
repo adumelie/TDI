@@ -82,10 +82,12 @@ def triggered():
     print("Detected !")
     LOGGING_DATA.append("DETECTED")
     time.sleep(60*3)
-    sound = AudioSegment.from_file('sound.wav', format='wav')
+    sound = AudioSegment.from_file('dreamQ1.mp3', format='mp3')
     play(sound)
+    LOGGING_DATA.append("QUEUE 1")
     time.sleep(60*5) # Time for dream, then wake up
-    sound = AudioSegment.from_file('sound2.wav', format='wav')
+    sound = AudioSegment.from_file('dreamWake.mp3', format='mp3')
+    LOGGING_DATA.append("WAKE UP")
     play(sound)
 
 #------------------------------
@@ -118,7 +120,7 @@ timer.timeout.connect(update)
 timer.start(step) 
 
 #------------------------------
-DRY_RUN = False 
+DRY_RUN = False
 if __name__ == '__main__':
     if DRY_RUN:
         print("WARNING: DRY RUN")
