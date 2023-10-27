@@ -9,7 +9,8 @@ import serial
 import time
 from datetime import datetime
 
-DEBUG = 0
+DEBUG = 2
+
 LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
 LOGGING_DATA = []
 
@@ -53,23 +54,23 @@ def read_serial_data(ser):
 
 def update():
     global curve, data_x, data_y
-    value = read_serial_data(ser)
 
     if DEBUG == 2:
         value = dummy_read()
+    else:
+        value = read_serial_data(ser)
+
     if DEBUG >= 1:
         print(value)
     data_y = data_y[1:]  # Remove first element
     data_y.append(value)
 
-    trigger_event(data_y)
+    trigger_event(data_y) # Check for trigger
 
     LOGGING_DATA.append(value)
     curve.setData(data_x, data_y)
 
 #------------------------------
-from pydub import AudioSegment
-from pydub.playback import play
 def trigger_event(values):
     global TRIGGERED
     if not TRIGGERED:
@@ -78,6 +79,9 @@ def trigger_event(values):
             if (array < THRESHOLD).all():
                 triggered()
                 TRIGGERED = True
+
+from pydub import AudioSegment
+from pydub.playback import play
 def triggered():
     print("Detected !")
     LOGGING_DATA.append("DETECTED")
@@ -91,7 +95,6 @@ def triggered():
     play(sound)
 
 #------------------------------
-port = detect_tty()
 app = QtWidgets.QApplication([])
 
 win = pg.GraphicsLayoutWidget()
@@ -113,7 +116,12 @@ curve = plot.plot(pen=pg.mkPen(color='r'), width=15)
 data_x = [i for i in range(N)]
 data_y = [0 for _ in data_x]
 
-ser = serial.Serial(port, 9600) 
+if DEBUG == 2:
+    port = None
+    ser = None
+else:
+    port = detect_tty()
+    ser = serial.Serial(port, 9600) 
 
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
