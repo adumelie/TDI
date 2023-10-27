@@ -2,6 +2,8 @@ import numpy as np
 import random
 import sys
 import pyqtgraph as pg
+from pyqtgraph import mkPen
+from PyQt5.QtCore import Qt
 from pyqtgraph.Qt import QtCore, QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow
 import serial
@@ -36,15 +38,19 @@ class PlotWindow(QMainWindow):
         self.y_min = 0
         self.y_max = 3.3
         self.stepMS = 10
-        self.N = self.stepMS * 100
+        self.N_VALUES = self.stepMS * 100
 
         self.TRIGGERED = False
-        self.TIME_START = self.N * 1  # To not directly play sound before pressing
+        self.average = 0
         self.THRESHOLD = 0.3
         self.BAUD_RATE = 9600
         self._serial_setup()
 
         self.initUI()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
+            self.close()    # CTRL-Q close shortcut
 
     def _load_replay_data(self):
         if self.REPLAY_FILE:
@@ -83,11 +89,15 @@ class PlotWindow(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle('Real-time data plot from sensor')
-        self.setGeometry(100, 100, 800, 600)
+
+        self.WINDOW_WIDTH = 800
+        self.WINDOW_HEIGHT = 600
+        self.setGeometry(100, 100, self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
 
         self.plot = pg.PlotWidget()
         self.setCentralWidget(self.plot)
 
+        self.plot.setXRange(0, self.N_VALUES)
 
         self.plot.setYRange(self.y_min, self.y_max)
         YAXIS = "left"; XAXIS = "bottom"
@@ -96,8 +106,11 @@ class PlotWindow(QMainWindow):
         self.plot.setTitle("Input data - FSR Glove")
         self.curve = self.plot.plot(pen=pg.mkPen(color='r'), width=15)
 
+        self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
+        self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
+
         # Start dummy data for plot to have line at start
-        self.data_x = [i for i in range(self.N)]
+        self.data_x = [i for i in range(self.N_VALUES)]
         self.data_y = [0 for _ in self.data_x]
 
         self.timer = QtCore.QTimer()
@@ -124,9 +137,15 @@ class PlotWindow(QMainWindow):
         self.LOGGING_DATA.append(value)
         self.curve.setData(self.data_x, self.data_y)
 
+        if self.average is not None:
+            self.avg_text_item.setText(f"Average: {self.average:.2f}")
+
+        if self.TRIGGERED:
+            self.curve.setPen(pg.mkPen(color='g'))
 
     def _dummy_read(self):
-        return random.random() * 3  # Range 0-3
+        return random.random() * 0.03
+        # return random.random() * 3  # Range 0-3
 
     def _read_serial_data(self):
         data = self.ser.readline().decode().strip()
@@ -152,9 +171,10 @@ class PlotWindow(QMainWindow):
 
     def check_for_trigger(self, values):
         if not self.TRIGGERED:
-            if len(self.LOGGING_DATA) > self.TIME_START:
-                array = np.array(values)
-                if (array < self.THRESHOLD).all():
+            self.average = sum(values) / len(values)
+            # Allow the first N values to elapse before checking
+            if len(self.LOGGING_DATA) > self.N_VALUES: 
+                if self.average < self.THRESHOLD:
                     self.triggered()
                     self.TRIGGERED = True
 
@@ -162,14 +182,14 @@ class PlotWindow(QMainWindow):
         print("Detected !")
         self.LOGGING_DATA.append("DETECTED")
 
-        time.sleep(60 * 3)
-        sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
-        play(sound)
-        self.LOGGING_DATA.append("QUEUE 1")
-        time.sleep(60 * 5)  # Time for dream, then wake up
-        sound = AudioSegment.from_file(self.soundDir + 'dreamWake.mp3', format='mp3')
-        self.LOGGING_DATA.append("WAKE UP")
-        play(sound)
+        # time.sleep(60 * 3)
+        # sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
+        # play(sound)
+        # self.LOGGING_DATA.append("QUEUE 1")
+        # time.sleep(60 * 5)  # Time for dream, then wake up
+        # sound = AudioSegment.from_file(self.soundDir + 'dreamWake.mp3', format='mp3')
+        # self.LOGGING_DATA.append("WAKE UP")
+        # play(sound)
 
     def closeEvent(self, event):
         print("Window is being closed")
@@ -178,14 +198,6 @@ class PlotWindow(QMainWindow):
             for item in self.LOGGING_DATA:
                 f.write(str(item) + "\n")
         event.accept()
-
-
-def main():
-    replay_file = "2023-10-16_21:02:26.473891"
-    app = QApplication(sys.argv)
-    window = PlotWindow(debug_level=2)
-    window.show()
-    sys.exit(app.exec_())
 
 def main():
     replay_file = None
