@@ -65,6 +65,11 @@ class PlotWindow(QMainWindow):
         else:
             self.port = self._detect_tty()
             self.ser = serial.Serial(self.port, self.BAUD_RATE)
+            try: # Test readable
+                _ = self.ser.readline()
+            except PermissionError:
+                print("Permission error when reading from serial {0} run './serial_setup.sh'".format(self.port))
+                sys.exit(1)
 
     def _detect_tty(self):
         tty_files = glob.glob('/dev/tty*')
@@ -183,11 +188,8 @@ def main():
     sys.exit(app.exec_())
 
 def main():
-    print(sys.argv)
-    print(len(sys.argv))
-
     replay_file = None
-    debug_level = DEBUG_DUMMY # TODO: should be NORMAL on real runs
+    debug_level = NORMAL
 
     if len(sys.argv) > 1:
         debug_level = int(sys.argv[1])
