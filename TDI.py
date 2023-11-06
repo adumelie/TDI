@@ -1,16 +1,24 @@
-import numpy as np
-import random
-import sys
-import pyqtgraph as pg
-from pyqtgraph import mkPen
-from PyQt5.QtCore import Qt
-from pyqtgraph.Qt import QtCore, QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow
-import serial
+"""
+# Targeted Dream Incubation client code
+# Author: Alexis Dumelié
+#
+# Code prototyping aided by LLM
+# Final code: Alexis Dumelié
+"""
+#----------------------------------------
 import time
+import sys
+import random
+import glob
 from datetime import datetime
 
-import glob
+import numpy as np
+import serial
+
+import pyqtgraph as pg
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow
+
 from pydub import AudioSegment
 from pydub.playback import play
 #----------------------------------------
@@ -23,7 +31,7 @@ class PlotWindow(QMainWindow):
     def __init__(self, debug_level=0, replay_file=None):
         super().__init__()
 
-        self.DEBUG = debug_level 
+        self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
 
@@ -36,9 +44,13 @@ class PlotWindow(QMainWindow):
         self.soundDir = "Sounds/"
 
         self.y_min = 0
-        self.y_max = 3.3
+        self.y_max = 1.5
         self.stepMS = 10
         self.N_VALUES = self.stepMS * 100
+
+        # Start dummy data for plot to have line at start
+        self.data_x = list(range(self.N_VALUES))
+        self.data_y = [0 for _ in self.data_x]
 
         self.TRIGGERED = False
         self.average = 0
@@ -46,7 +58,17 @@ class PlotWindow(QMainWindow):
         self.BAUD_RATE = 9600
         self._serial_setup()
 
+        self._calibration()
+
         self.initUI()
+
+    def _calibration(self):
+        # Ask to fully open, press to rec
+        # Ask to fully close, press to rec
+        # Repeat 3 times, avg for res
+        # TODO
+        pass
+
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
@@ -54,7 +76,7 @@ class PlotWindow(QMainWindow):
 
     def _load_replay_data(self):
         if self.REPLAY_FILE:
-            with open(self.REPLAY_FILE, 'r') as f:
+            with open(self.REPLAY_FILE, 'r', encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -74,10 +96,12 @@ class PlotWindow(QMainWindow):
             try: # Test readable
                 _ = self.ser.readline()
             except PermissionError:
-                print("Permission error when reading from serial {0} run './serial_setup.sh'".format(self.port))
+                print(f"Permission error when reading from serial {self.port} \
+                      run './serial_setup.sh'")
                 sys.exit(1)
 
-    def _detect_tty(self):
+    @staticmethod
+    def _detect_tty():
         tty_files = glob.glob('/dev/tty*')
         acm_files = [file for file in tty_files if 'ACM' in file]
         if acm_files:
@@ -109,16 +133,13 @@ class PlotWindow(QMainWindow):
         self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
 
-        # Start dummy data for plot to have line at start
-        self.data_x = [i for i in range(self.N_VALUES)]
-        self.data_y = [0 for _ in self.data_x]
-
-        self.timer = QtCore.QTimer()
+        self.timer = QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(self.stepMS)
 
 
     def update(self):
+        # Getting value
         if self.DEBUG == DEBUG_DUMMY:
             value = self._dummy_read()
         elif self.DEBUG == DEBUG_REPLAY:
@@ -129,36 +150,37 @@ class PlotWindow(QMainWindow):
         if self.DEBUG >= DEBUG_BASIC:
             print(value)
 
+        # Updating data
         self.data_y = self.data_y[1:]  # Remove first element
         self.data_y.append(value)
 
+        # Process update
         self.check_for_trigger(self.data_y)
 
+        # Log and plot
         self.LOGGING_DATA.append(value)
         self.curve.setData(self.data_x, self.data_y)
-
         if self.average is not None:
             self.avg_text_item.setText(f"Average: {self.average:.2f}")
-
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
 
-    def _dummy_read(self):
-        return random.random() * 0.03
-        # return random.random() * 3  # Range 0-3
+    @staticmethod
+    def _dummy_read():
+        return random.random() * 3  # Range 0-3
 
     def _read_serial_data(self):
         data = self.ser.readline().decode().strip()
         return float(data) if data else None
 
     def _replay_from_log(self, log_file):
-        with open(log_file, 'r') as f:
+        with open(log_file, 'r', encoding="utf-8") as f:
             for line in f:
                 data = line.strip().split(',')
                 if len(data) == 2:
                     x_value, y_value = float(data[0]), float(data[1])
-                    self.x.append(x_value)
-                    self.y.append(y_value)
+                    self.data_x.append(x_value)
+                    self.data_y.append(y_value)
                     self.plotWidget.plot(self.x, self.y, pen=pg.mkPen('b'))
                 time.sleep(0.1)
 
@@ -166,14 +188,17 @@ class PlotWindow(QMainWindow):
         NO_MORE_DATA = 0
         if self.REPLAY_DATA:
             return self.REPLAY_DATA.pop(0)
-        else:
-            return NO_MORE_DATA
+        return NO_MORE_DATA
 
     def check_for_trigger(self, values):
+        # Once CHECK is true, check if value returns to range of beginning
+        # TODO
+
+        # OLD Code:
         if not self.TRIGGERED:
             self.average = sum(values) / len(values)
             # Allow the first N values to elapse before checking
-            if len(self.LOGGING_DATA) > self.N_VALUES: 
+            if len(self.LOGGING_DATA) > self.N_VALUES:
                 if self.average < self.THRESHOLD:
                     self.triggered()
                     self.TRIGGERED = True
@@ -182,19 +207,19 @@ class PlotWindow(QMainWindow):
         print("Detected !")
         self.LOGGING_DATA.append("DETECTED")
 
-        # time.sleep(60 * 3)
-        # sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
-        # play(sound)
-        # self.LOGGING_DATA.append("QUEUE 1")
-        # time.sleep(60 * 5)  # Time for dream, then wake up
-        # sound = AudioSegment.from_file(self.soundDir + 'dreamWake.mp3', format='mp3')
-        # self.LOGGING_DATA.append("WAKE UP")
-        # play(sound)
+        time.sleep(60 * 3)
+        sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
+        play(sound)
+        self.LOGGING_DATA.append("QUEUE 1")
+        time.sleep(60 * 5)  # Time for dream, then wake up
+        sound = AudioSegment.from_file(self.soundDir + 'dreamWake.mp3', format='mp3')
+        self.LOGGING_DATA.append("WAKE UP")
+        play(sound)
 
     def closeEvent(self, event):
         print("Window is being closed")
         print("Logging data")
-        with open(self.LOG_FILE, "w") as f:
+        with open(self.LOG_FILE, "w", encoding="utf-8") as f:
             for item in self.LOGGING_DATA:
                 f.write(str(item) + "\n")
         event.accept()
