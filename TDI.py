@@ -17,7 +17,7 @@ import serial
 
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from pydub import AudioSegment
 from pydub.playback import play
@@ -58,17 +58,42 @@ class PlotWindow(QMainWindow):
         self.BAUD_RATE = 9600
         self._serial_setup()
 
-        self._calibration()
+        # Calibration phase
+        open_values, closed_values = self._calibration()
+        self.mean_open = np.mean(open_values)
+        self.mean_closed =np.mean(closed_values)
+        self.std_open = np.std(open_values)
+        self.std_closed = np.std(closed_values)
+        range_factor = 1.5
+        self.y_top = self.mean_open - range_factor * self.std_open
+        self.y_bottom = self.mean_open - range_factor * self.std_open
 
         self.initUI()
 
-    def _calibration(self):
-        # Ask to fully open, press to rec
-        # Ask to fully close, press to rec
-        # Repeat 3 times, avg for res
-        # TODO
-        pass
+    def _calibration(self, num_actions=3):
+        open_values = []
+        closed_values = []
+        for _ in range(num_actions):
+            action_close = "Please close your fist, press Enter when done"
+            closed_values.append(self.record_action(action_close, is_open=False))
 
+            action_open = "Please open your fist, press Enter when done"
+            open_values.append(self.record_action(action_open, is_open=True))
+        return open_values, closed_values
+
+    def record_action(self, action_name, is_open):
+        message = (f'<p style="font-size:20px; font-weight:bold;\
+            color:{"green" if is_open else "red"}">'
+            f'{"OPEN" if is_open else "CLOSE"} your fist</p>'
+            f'<p>{action_name}</p>')
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("User Action - Calibration Phase")
+        RICH_TEXT_FORMAT = 1
+        msg_box.setTextFormat(RICH_TEXT_FORMAT)
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
+        return self.get_value()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
@@ -133,22 +158,27 @@ class PlotWindow(QMainWindow):
         self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
 
+        # Detection threshold lines for visual reference
+        self.plot.addLine(y=self.y_top, pen=pg.mkPen('y'))
+        self.plot.addLine(y=self.y_bottom, pen=pg.mkPen('y'))
+
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(self.stepMS)
 
-
-    def update(self):
-        # Getting value
+    def get_value(self):
         if self.DEBUG == DEBUG_DUMMY:
             value = self._dummy_read()
         elif self.DEBUG == DEBUG_REPLAY:
             value = self._consume_replay_data()
         else:
             value = self._read_serial_data()
-
         if self.DEBUG >= DEBUG_BASIC:
             print(value)
+        return value
+
+    def update(self):
+        value = self.get_value()
 
         # Updating data
         self.data_y = self.data_y[1:]  # Remove first element
@@ -160,14 +190,14 @@ class PlotWindow(QMainWindow):
         # Log and plot
         self.LOGGING_DATA.append(value)
         self.curve.setData(self.data_x, self.data_y)
+
         if self.average is not None:
             self.avg_text_item.setText(f"Average: {self.average:.2f}")
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
 
-    @staticmethod
-    def _dummy_read():
-        return random.random() * 3  # Range 0-3
+    def _dummy_read(self):
+        return random.random() * self.y_max
 
     def _read_serial_data(self):
         data = self.ser.readline().decode().strip()
