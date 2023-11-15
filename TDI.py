@@ -31,7 +31,6 @@ class DataCollector(QThread):
     value_updated = pyqtSignal(float)
 
     def __init__(self, ser, debug_level, y_max, parent=None):
-        # super(DataCollector, self).__init__(parent)
         super().__init__(parent)
         self._stop = False
         self.serial_interface = ser
@@ -85,14 +84,16 @@ class PlotWindow(QMainWindow):
         self.y_max = 1.5
         self.stepMS = 10    # 100 Hz sampling
         self.N_VALUES = self.stepMS * 100
+        self.time_start = 0
+        self.AVG_WAIT = 0
+        self.average = 0
+
 
         # Start dummy data for plot to have line at start
         self.data_x = list(range(self.N_VALUES))
         self.data_y = [0 for _ in self.data_x]
 
         self.TRIGGERED = False
-        self.average = 0
-        self.THRESHOLD = 0.3
         self.BAUD_RATE = 9600
         self._serial_setup()
 
@@ -106,10 +107,9 @@ class PlotWindow(QMainWindow):
         self.mean_closed =np.mean(closed_values)
         self.std_open = np.std(open_values)
         self.std_closed = np.std(closed_values)
-        range_factor = 3 
-        self.y_top = self.mean_open - range_factor * self.std_open
+        range_factor = 0.9
+        self.y_top = self.mean_closed - range_factor * self.std_closed
         self.y_bottom = self.mean_open - range_factor * self.std_open
-        self.y_bottom = 1 # TODO debug RM
 
 
         self.initUI()
@@ -203,7 +203,7 @@ class PlotWindow(QMainWindow):
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
 
         # Detection threshold lines for visual reference
-        self.plot.addLine(y=self.y_top, pen=pg.mkPen('y'))
+        self.plot.addLine(y=self.y_top, pen=pg.mkPen('g'))
         self.plot.addLine(y=self.y_bottom, pen=pg.mkPen('y'))
 
         self.timer = QTimer()
@@ -236,7 +236,6 @@ class PlotWindow(QMainWindow):
             self.curve.setPen(pg.mkPen(color='g'))
 
 
-
     def _replay_from_log(self, log_file):
         with open(log_file, 'r', encoding="utf-8") as f:
             for line in f:
@@ -256,14 +255,15 @@ class PlotWindow(QMainWindow):
 
     def check_for_trigger(self, values):
         # Once CHECK is true, check if value returns to range of beginning
-        # TODO use y_top y_bottom
         if not self.TRIGGERED:
             self.average = sum(values) / len(values)
             # Allow the first N values to elapse before checking
             if len(self.LOGGING_DATA) > self.N_VALUES:
-                if self.average >= self.y_bottom:
-                    self.triggered()
-                    self.TRIGGERED = True
+                if self.average <= self.y_bottom: # If under y_bottom for x seconds
+                    self.time_start = time.time()
+                    if time.time() - self.time_start >= self.AVG_WAIT:
+                        self.triggered()
+                        self.TRIGGERED = True
 
     def triggered(self):
         print("Detected !")
