@@ -8,7 +8,6 @@
 #----------------------------------------
 import time
 import sys
-import random
 import glob
 from datetime import datetime
 
@@ -16,78 +15,29 @@ import numpy as np
 import serial
 
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from pydub import AudioSegment
 from pydub.playback import play
 #----------------------------------------
-NORMAL = 0
-DEBUG_BASIC = 1
-DEBUG_DUMMY = 2
-DEBUG_REPLAY = 3
-#----------------------------------------
-class DataCollector(QThread):
-    value_updated = pyqtSignal(float)
-
-    def __init__(self, ser, debug_level, y_max, parent=None):
-        super().__init__(parent)
-        self._stop = False
-        self.serial_interface = ser
-        self.DEBUG = debug_level
-        self.y_max = y_max
-
-    def run(self):
-        while not self._stop:
-            value = self.get_value()
-            self.value_updated.emit(value)
-            self.msleep(10)  # Sleep for 10 milliseconds
-
-    def stop(self):
-        self._stop = True
-
-    def get_value(self):
-        if self.DEBUG == DEBUG_DUMMY:
-            value = self._dummy_read()
-        elif self.DEBUG == DEBUG_REPLAY:
-            value = self._consume_replay_data()
-        else:
-            value = self._read_serial_data()
-        if self.DEBUG >= DEBUG_BASIC:
-            print(value)
-        return value
-
-    def _dummy_read(self):
-        return random.random() * self.y_max
-
-    def _read_serial_data(self):
-        data = self.serial_interface.readline().decode().strip()
-        return float(data) if data else None
+from DEBUG_ENUM import NORMAL, DEBUG_DUMMY, DEBUG_REPLAY
+from Datacollector import DataCollector
 #----------------------------------------
 class PlotWindow(QMainWindow):
     def __init__(self, debug_level=0, replay_file=None):
         super().__init__()
 
-        self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
 
-        if self.DEBUG == DEBUG_REPLAY:
-            self.REPLAY_FILE = replay_file
-            self.REPLAY_DATA = []
-            if self.REPLAY_FILE:
-                self._load_replay_data()
-
         self.soundDir = "Sounds/"
 
-        self.y_min = 0
-        self.y_max = 1.5
         self.stepMS = 10    # 100 Hz sampling
         self.N_VALUES = self.stepMS * 100
         self.time_start = 0
         self.AVG_WAIT = 0
         self.average = 0
-
 
         # Start dummy data for plot to have line at start
         self.data_x = list(range(self.N_VALUES))
@@ -97,9 +47,10 @@ class PlotWindow(QMainWindow):
         self.BAUD_RATE = 9600
         self._serial_setup()
 
-        self.data_collector = DataCollector(self.ser, debug_level, self.y_max)
+        self.data_collector = DataCollector(self.ser, debug_level, replay_file)
         self.data_collector.value_updated.connect(self.update_value)
         self.data_collector.start()
+        self.new_value = 0
 
         # Calibration phase
         open_values, closed_values = self._calibration()
@@ -143,17 +94,6 @@ class PlotWindow(QMainWindow):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
             self.close()    # CTRL-Q close shortcut
 
-    def _load_replay_data(self):
-        if self.REPLAY_FILE:
-            with open(self.REPLAY_FILE, 'r', encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            value = float(line)
-                            self.REPLAY_DATA.append(value)
-                        except ValueError:
-                            pass  # Ignore non-numeric data
 
     def _serial_setup(self, ):
         if self.DEBUG == DEBUG_DUMMY:
@@ -191,8 +131,8 @@ class PlotWindow(QMainWindow):
         self.setCentralWidget(self.plot)
 
         self.plot.setXRange(0, self.N_VALUES)
+        self.plot.setYRange(0, self.data_collector.max())
 
-        self.plot.setYRange(self.y_min, self.y_max)
         YAXIS = "left"; XAXIS = "bottom"
         self.plot.setLabel(YAXIS, "Voltage")
         self.plot.setLabel(XAXIS, "Time (update " + str(self.stepMS) + " ms)")
@@ -235,26 +175,7 @@ class PlotWindow(QMainWindow):
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
 
-
-    def _replay_from_log(self, log_file):
-        with open(log_file, 'r', encoding="utf-8") as f:
-            for line in f:
-                data = line.strip().split(',')
-                if len(data) == 2:
-                    x_value, y_value = float(data[0]), float(data[1])
-                    self.data_x.append(x_value)
-                    self.data_y.append(y_value)
-                    self.plotWidget.plot(self.x, self.y, pen=pg.mkPen('b'))
-                time.sleep(0.1)
-
-    def _consume_replay_data(self):
-        NO_MORE_DATA = 0
-        if self.REPLAY_DATA:
-            return self.REPLAY_DATA.pop(0)
-        return NO_MORE_DATA
-
     def check_for_trigger(self, values):
-        # Once CHECK is true, check if value returns to range of beginning
         if not self.TRIGGERED:
             self.average = sum(values) / len(values)
             # Allow the first N values to elapse before checking
@@ -266,6 +187,7 @@ class PlotWindow(QMainWindow):
                         self.TRIGGERED = True
 
     def triggered(self):
+        # TODO: recording and dormio cycles
         print("Detected !")
         self.LOGGING_DATA.append("DETECTED")
 
