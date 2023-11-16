@@ -27,7 +27,8 @@ from Datacollector import DataCollector
 class PlotWindow(QMainWindow):
     def __init__(self, debug_level=0, replay_file=None):
         super().__init__()
-
+        
+        self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
 
@@ -96,7 +97,7 @@ class PlotWindow(QMainWindow):
 
 
     def _serial_setup(self, ):
-        if self.DEBUG == DEBUG_DUMMY:
+        if self.DEBUG >= DEBUG_DUMMY:
             self.port = None
             self.ser = None
         else:
