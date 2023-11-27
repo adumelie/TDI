@@ -24,28 +24,35 @@ from pydub.playback import play
 from DEBUG_ENUM import NORMAL, DEBUG_DUMMY, DEBUG_REPLAY
 from PHASES_ENUM import CALIBRATION, RUNNING, DETECTED, PROMPTING, RECORDING
 from Datacollector import DataCollector
-LIVE = False 
 #----------------------------------------
 class PlotWindow(QMainWindow):
-    def __init__(self, debug_level=0, replay_file=None):
+    def __init__(self, debug_level=0, replay_file=None, is_live=True):
         super().__init__()
-        
+        self.LIVE = is_live
         self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
         self.PHASE = CALIBRATION
+        self.START_TIME = time.time()
+        self.CALIBARTION_PERIOD = 90 # 1.5 min
+        self.STABLE_STATE = 0
+        self.NEW_STATE = 0
+        self.NEW_STATE_START_TIME = 0
+        self.NEW_STABLE_STATE_TIME_WINDOW = 10 # sec
+        self.STATE_CHANGING = False
 
         self.soundDir = "Sounds/"
 
         self.stepMS = 10    # 100 Hz sampling
-        self.N_VALUES = self.stepMS * 100
+        self.N_VALUES = self.stepMS * 100 
         self.time_start = 0
-        self.AVG_WAIT = 0
-        self.average = 0
+        self.AVG_WAIT = 0   # TODO RM ?
+        self.avg_last_sec = 0
 
         # Start dummy data for plot to have line at start
         self.data_x = list(range(self.N_VALUES))
         self.data_y = [0 for _ in self.data_x]
+        # Data_y has values over last 1 second
 
         self.TRIGGERED = False  # TODO move to using phase attribute
         self.BAUD_RATE = 9600
@@ -56,24 +63,17 @@ class PlotWindow(QMainWindow):
         self.data_collector.start()
         self.new_value = 0
 
-        # Calibration phase
-        open_values, closed_values = self._calibration()
-        self.mean_open = np.mean(open_values)
-        self.mean_closed =np.mean(closed_values)
-        self.std_open = np.std(open_values)
-        self.std_closed = np.std(closed_values)
-        range_factor = 0
-        self.y_top = self.mean_closed - range_factor * self.std_closed
-        self.y_bottom = self.mean_open - range_factor * self.std_open
-
+        # TODO TMP Values
+        self.y_top = 0
+        self.y_bottom = 0
 
         self.initUI()
 
-    def set_phase(self, phase): # TODO add enum type ?
+    def set_phase(self, phase): 
         self.PHASE = phase
         # TODO phase change logging
 
-    def _calibration(self, num_actions=3):
+    def _calibration(self, num_actions=3):  # TODO RM
         open_values = []
         closed_values = []
         for _ in range(num_actions):
@@ -84,7 +84,7 @@ class PlotWindow(QMainWindow):
             open_values.append(self.record_action(action_open, is_open=True))
         return open_values, closed_values
 
-    def record_action(self, action_name, is_open):
+    def record_action(self, action_name, is_open): # TODO RM
         message = (f'<p style="font-size:20px; font-weight:bold;\
             color:{"green" if is_open else "red"}">'
             f'{"OPEN" if is_open else "CLOSE"} your fist</p>'
@@ -101,7 +101,6 @@ class PlotWindow(QMainWindow):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
             self.close()    # CTRL-Q close shortcut
-
 
     def _serial_setup(self, ):
         if self.DEBUG >= DEBUG_DUMMY:
@@ -164,38 +163,101 @@ class PlotWindow(QMainWindow):
     def get_value(self):
         return self.new_value
 
-    def update(self):
-        value = self.get_value()
-
-        # Updating data
+    def update_data(self, value):
+        # TODO 1euro filter denoising
         self.data_y = self.data_y[1:]  # Remove first element
         self.data_y.append(value)
-
-        # Process update
-        self.check_for_trigger(self.data_y)
-
-        # Log and plot
+        self.avg_last_sec_last_sec = np.mean(self.data_y)
         self.LOGGING_DATA.append(value)
-        self.curve.setData(self.data_x, self.data_y)
 
-        if self.average is not None:
-            self.avg_text_item.setText(f"Average: {self.average:.2f}")
+    def update_plot(self):
+        self.curve.setData(self.data_x, self.data_y)
+        if self.avg_last_sec is not None:
+            self.avg_text_item.setText(f"Average: {self.avg_last_sec:.2f}")
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
 
-    def check_for_trigger(self, values):
-        if LIVE:
-            if not self.TRIGGERED:
-                self.average = sum(values) / len(values)
-                # Allow the first N values to elapse before checking
-                if len(self.LOGGING_DATA) > self.N_VALUES:
-                    if self.average < self.y_bottom: # If under y_bottom for x seconds
-                        self.time_start = time.time()
-                        if time.time() - self.time_start >= self.AVG_WAIT:
-                            self.triggered()
-                            self.TRIGGERED = True
+    def update(self):   # MAIN FUNCTION
+        value = self.get_value()
+        self.update_data(value)
+        self.check_for_trigger()
 
-    def triggered(self):
+        if self.PHASE == CALIBRATION:
+            if time.time() - self.START_TIME >= self.CALIBRATION_PERIOD:
+                self.STABLE_STATE = self.calibration_avg
+                self.set_phase(RUNNING)
+            else:
+                # Running average update
+                self.calibration_total += value
+                self.calibration_avg_count += 1
+                self.calibration_avg = self.calibration_total / self.calibration_avg_count
+
+        self.update_plot()
+
+    def check_for_trigger(self):
+        """
+        Base case:
+            State has no yet changed
+            If our current value is above the original state + delta
+            then we are in a changing phase
+            Set new state as being current value
+            Start timer (timer is reset upon value changing out of bounded range)
+        Changing case:
+            We are in changing state, we have passed out of the range
+            from the original stable state
+            New upper bound based on previous new state + delta
+            Now see if we are still changing (value is above this new bound)
+            Or if we are within bound of the new state
+            If above, we are still changing, set new state, reset state timer
+            If still in range: check timer, are we potentially waiting to
+            climb more ? Or have we been in this new state for long enough ?
+            If we have been here for long enough then this is a NEW STABLE state
+            Hence we have achieved detection !
+        """
+        if not self.LIVE:
+            return  # Ignore checking when dry run
+        if self.TRIGGERED:
+            return # Ignore checking if already in triggered state
+
+        sensory_repeatability = 0.02 
+        state_change_range = 0.1
+        delta_percent = sensor_repeatability + state_change_range
+        original_upper_bound_stable = self.STABLE_STATE * (1 + delta_percent) 
+
+        if self.STATE_CHANGING:
+            # state already changing (past original stable state)
+            # has exited upper bound
+            # now see if still changing or stabilize into new state
+            # get new state, see if next new state, ie: X-time after
+            # is still within state_range of new state
+            changing_state_upper_bound = self.NEW_STATE * (1 + delta_percent)
+            if self.avg_last_sec >= changing_state_upper_bound:
+                # more than 10+2% above last state observed, still changing !
+                # update new state
+                self.NEW_STATE = self.avg_last_sec
+                # reset new state timer
+                self.NEW_STATE_START_TIME = time.time()
+            else:
+                # Not past new state upper bound
+                # did we stabilize ? or are we potential climbing again
+                # check timer :
+                if time.time() - self.NEW_STATE_START_TIME >= self.NEW_STABLE_STATE_TIME_WINDOW:
+                    # enough time has passed in new state
+                    # hence this is a new STABLE state
+                    # we have achieved detection
+                    self.triggered()
+            
+
+        # check if 2 + 10 % above ORIGINAL stable state
+        if self.avg_last_sec >= original_upper_bound_stable:
+            self.STATE_CHANGING = True
+            self.NEW_STATE = self.avg_last_sec
+            self.NEW_STATE_START_TIME = time.time()
+            # check if has been in new
+
+    def triggered(self):    # TDI PROTOCOL
+        self.TRIGGERED = True
+        self.set_phase(DETECTED)
         # TODO: recording and dormio cycles
         # WIP
         print("Detected !")
@@ -232,8 +294,9 @@ def main():
         print("Usage: python your_script.py <debug_level> [<replay_file>]")
         sys.exit(1)
 
+    LIVE = False    # False if DRY RUN --> NO DETECTION
     app = QApplication(sys.argv)
-    window = PlotWindow(debug_level, replay_file)
+    window = PlotWindow(debug_level, replay_file, LIVE)
     window.show()
     sys.exit(app.exec_())
 
