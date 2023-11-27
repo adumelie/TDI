@@ -1,4 +1,7 @@
-NORMAL = 0
-DEBUG_BASIC = 1
-DEBUG_DUMMY = 2
-DEBUG_REPLAY = 3
+from enum import IntEnum
+
+class DebugLevel(IntEnum):
+    NORMAL = 0
+    BASIC = 1
+    DUMMY = 2
+    REPLAY = 3

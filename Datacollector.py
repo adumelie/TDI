@@ -4,7 +4,7 @@
 """
 import random
 from PyQt5.QtCore import QThread, pyqtSignal
-from DEBUG_ENUM import DEBUG_BASIC, DEBUG_DUMMY, DEBUG_REPLAY
+from DEBUG_ENUM import DebugLevel
 
 class DataCollector(QThread):
     value_updated = pyqtSignal(float)
@@ -16,7 +16,7 @@ class DataCollector(QThread):
         self.DEBUG = debug_level
         self.y_max = 1.5
 
-        if self.DEBUG == DEBUG_REPLAY:
+        if self.DEBUG == DebugLevel.REPLAY:
             self.REPLAY_FILE = replay_file
             self.REPLAY_DATA = []
             if self.REPLAY_FILE:
@@ -48,13 +48,13 @@ class DataCollector(QThread):
     #------------------------------
 
     def get_value(self):
-        if self.DEBUG == DEBUG_DUMMY:
+        if self.DEBUG == DebugLevel.DUMMY:
             value = self._dummy_read()
-        elif self.DEBUG == DEBUG_REPLAY:
+        elif self.DEBUG == DebugLevel.REPLAY:
             value = self._consume_replay_data()
         else:
             value = self._read_serial_data()
-        if self.DEBUG >= DEBUG_BASIC:
+        if self.DEBUG >= DebugLevel.BASIC:
             print(value)
         return value
 

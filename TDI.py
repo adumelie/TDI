@@ -22,8 +22,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 from pydub import AudioSegment
 from pydub.playback import play
 #----------------------------------------
-from DEBUG_ENUM import NORMAL, DEBUG_DUMMY, DEBUG_REPLAY
-from PHASES_ENUM import CALIBRATION, RUNNING, DETECTED, PROMPTING, RECORDING
+from DEBUG_ENUM import DebugLevel
+from PHASES_ENUM import Phases
 from Datacollector import DataCollector
 #----------------------------------------
 class PlotWindow(QMainWindow):
@@ -33,7 +33,7 @@ class PlotWindow(QMainWindow):
         self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
-        self.PHASE = CALIBRATION
+        self.PHASE = Phases.CALIBRATION
         self.START_TIME = time.time()
         self.CALIBRATION_PERIOD = 90 # 1.5 min
         self.STABLE_STATE = 0
@@ -83,7 +83,7 @@ class PlotWindow(QMainWindow):
 
     def set_phase(self, phase): 
         self.PHASE = phase
-        # TODO phase change logging, with enum to string
+        self.LOGGING_DATA.append(self.PHASE)
 
     def waitForUser(self):
         message = "Press ok when ready !"
@@ -100,7 +100,7 @@ class PlotWindow(QMainWindow):
             self.close()    # CTRL-Q close shortcut
 
     def _serial_setup(self, ):
-        if self.DEBUG >= DEBUG_DUMMY:
+        if self.DEBUG >= DebugLevel.DUMMY:
             self.port = None
             self.ser = None
         else:
@@ -180,10 +180,10 @@ class PlotWindow(QMainWindow):
         self.update_data(value)
         self.check_for_trigger()
 
-        if self.PHASE == CALIBRATION:
+        if self.PHASE == Phases.CALIBRATION:
             if time.time() - self.START_TIME >= self.CALIBRATION_PERIOD:
                 self.STABLE_STATE = self.calibration_avg
-                self.set_phase(RUNNING)
+                self.set_phase(Phases.RUNNING)
             else:
                 # Running average update
                 self.calibration_total += value
@@ -240,11 +240,10 @@ class PlotWindow(QMainWindow):
 
     def triggered(self):    # TDI PROTOCOL
         self.TRIGGERED = True
-        self.set_phase(DETECTED)
+        self.set_phase(Phases.DETECTED)
+        print(self.PHASE)
         # TODO: recording and dormio cycles
         # WIP
-        print("Detected !")
-        self.LOGGING_DATA.append("DETECTED")
 
         time.sleep(30)
         sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
@@ -265,11 +264,11 @@ class PlotWindow(QMainWindow):
 #----------------------------------------
 def main():
     replay_file = None
-    debug_level = NORMAL
+    debug_level = DebugLevel.NORMAL
 
     if len(sys.argv) > 1:
         debug_level = int(sys.argv[1])
-        if debug_level == DEBUG_REPLAY and len(sys.argv) > 2:
+        if debug_level == DebugLevel.REPLAY and len(sys.argv) > 2:
             replay_file = sys.argv[2]
             if not replay_file.startswith("LOGS/"):
                 replay_file = "LOGS/" + replay_file
