@@ -25,6 +25,7 @@ from pydub.playback import play
 from DEBUG_ENUM import DebugLevel
 from PHASES_ENUM import Phases
 from Datacollector import DataCollector
+from recorder import Recorder
 #----------------------------------------
 class PlotWindow(QMainWindow):
     def __init__(self, debug_level=0, replay_file=None, is_live=True):
@@ -65,7 +66,7 @@ class PlotWindow(QMainWindow):
         self.data_y = [0 for _ in self.data_x]
         # Data_y has values over last 1 second
 
-        self.TRIGGERED = False  # TODO move to using phase attribute
+        self.TRIGGERED = False 
         self.BAUD_RATE = 9600
         self._serial_setup()
 
@@ -74,12 +75,19 @@ class PlotWindow(QMainWindow):
         self.data_collector.start()
         self.new_value = 0
 
-        # TODO TMP Values
-        self.y_top = 0
-        self.y_bottom = 0
+        self.recorder = None
+        self.set_recorder()
 
         self.waitForUser()
         self.initUI()
+
+    def set_recorder(self):
+        self.recorder = Recorder()
+        self.recorder.finished_signal.connect(self.reset_trigger)
+        
+    def reset_trigger(self):
+        self.set_recorder()
+        self.TRIGGERED = False
 
     def set_phase(self, phase): 
         self.PHASE = phase
@@ -147,12 +155,19 @@ class PlotWindow(QMainWindow):
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
 
         # Detection threshold lines for visual reference
-        self.plot.addLine(y=self.y_top, pen=pg.mkPen('g'))
-        self.plot.addLine(y=self.y_bottom, pen=pg.mkPen('y'))
+        self.plot.addLine(y=self.calibration_avg, pen=pg.mkPen('y'))
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(self.stepMS)
+
+    def closeEvent(self, event):
+        print("Window is being closed")
+        print("Logging data")
+        with open(self.LOG_FILE, "w", encoding="utf-8") as f:
+            for item in self.LOGGING_DATA:
+                f.write(str(item) + "\n")
+        event.accept()
 
     def update_value(self, value):
         self.new_value = value
@@ -174,8 +189,8 @@ class PlotWindow(QMainWindow):
             self.avg_text_item.setText(f"Average: {self.avg_last_sec:.2f}")
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
-
-    def update(self):   # MAIN FUNCTION
+    #---------------
+    def update(self):
         value = self.get_value()
         self.update_data(value)
         self.check_for_trigger()
@@ -237,35 +252,17 @@ class PlotWindow(QMainWindow):
                 self.NEW_STATE = self.avg_last_sec
                 self.NEW_STATE_START_TIME = time.time()
 
-
     def triggered(self):    # TDI PROTOCOL
         self.TRIGGERED = True
         self.set_phase(Phases.DETECTED)
         print(self.PHASE)
-        # TODO: recording and dormio cycles
-        # WIP
+        print("Starting prompting/recording phase, graph will keep updating...")
+        self.recorder.start()
 
-        time.sleep(30)
-        sound = AudioSegment.from_file(self.soundDir + 'dreamQ1.mp3', format='mp3')
-        play(sound)
-        self.LOGGING_DATA.append("QUEUE 1")
-        time.sleep(60 * 5)  # Time for dream, then wake up
-        sound = AudioSegment.from_file(self.soundDir + 'dreamWake.mp3', format='mp3')
-        self.LOGGING_DATA.append("WAKE UP")
-        play(sound)
-
-    def closeEvent(self, event):
-        print("Window is being closed")
-        print("Logging data")
-        with open(self.LOG_FILE, "w", encoding="utf-8") as f:
-            for item in self.LOGGING_DATA:
-                f.write(str(item) + "\n")
-        event.accept()
 #----------------------------------------
 def main():
     replay_file = None
     debug_level = DebugLevel.NORMAL
-
     if len(sys.argv) > 1:
         debug_level = int(sys.argv[1])
         if debug_level == DebugLevel.REPLAY and len(sys.argv) > 2:
@@ -275,12 +272,10 @@ def main():
     elif len(sys.argv) > 3:
         print("Usage: python your_script.py <debug_level> [<replay_file>]")
         sys.exit(1)
-
     LIVE = False    # False if DRY RUN --> NO DETECTION
     app = QApplication(sys.argv)
     window = PlotWindow(debug_level, replay_file, LIVE)
     window.show()
     sys.exit(app.exec_())
-
 if __name__ == '__main__':
     main()
