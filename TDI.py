@@ -225,35 +225,20 @@ class PlotWindow(QMainWindow):
         original_upper_bound_stable = self.STABLE_STATE * (1 + delta_percent) 
 
         if self.STATE_CHANGING:
-            # state already changing (past original stable state)
-            # has exited upper bound
-            # now see if still changing or stabilize into new state
-            # get new state, see if next new state, ie: X-time after
-            # is still within state_range of new state
             changing_state_upper_bound = self.NEW_STATE * (1 + delta_percent)
             if self.avg_last_sec >= changing_state_upper_bound:
-                # more than 10+2% above last state observed, still changing !
-                # update new state
-                self.NEW_STATE = self.avg_last_sec
-                # reset new state timer
+                self.NEW_STATE = self.avg_last_sec # Still changing
                 self.NEW_STATE_START_TIME = time.time()
             else:
-                # Not past new state upper bound
-                # did we stabilize ? or are we potential climbing again
-                # check timer :
-                if time.time() - self.NEW_STATE_START_TIME >= self.NEW_STABLE_STATE_TIME_WINDOW:
-                    # enough time has passed in new state
-                    # hence this is a new STABLE state
-                    # we have achieved detection
+                STABILIZED = time.time() - self.NEW_STATE_START_TIME >= self.NEW_STABLE_STATE_TIME_WINDOW:
+                if STABILIZED:
                     self.triggered()
-            
+        else: # Still in range of original stable state
+            if self.avg_last_sec >= original_upper_bound_stable:
+                self.STATE_CHANGING = True
+                self.NEW_STATE = self.avg_last_sec
+                self.NEW_STATE_START_TIME = time.time()
 
-        # check if 2 + 10 % above ORIGINAL stable state
-        if self.avg_last_sec >= original_upper_bound_stable:
-            self.STATE_CHANGING = True
-            self.NEW_STATE = self.avg_last_sec
-            self.NEW_STATE_START_TIME = time.time()
-            # check if has been in new
 
     def triggered(self):    # TDI PROTOCOL
         self.TRIGGERED = True
