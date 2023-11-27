@@ -14,6 +14,7 @@ from datetime import datetime
 import numpy as np
 import serial
 
+from OneEuroFilter import OneEuroFilter
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
@@ -34,19 +35,29 @@ class PlotWindow(QMainWindow):
         self.LOGGING_DATA = []
         self.PHASE = CALIBRATION
         self.START_TIME = time.time()
-        self.CALIBARTION_PERIOD = 90 # 1.5 min
+        self.CALIBRATION_PERIOD = 90 # 1.5 min
         self.STABLE_STATE = 0
         self.NEW_STATE = 0
         self.NEW_STATE_START_TIME = 0
-        self.NEW_STABLE_STATE_TIME_WINDOW = 10 # sec
+        self.NEW_STABLE_STATE_TIME_WINDOW = 10 # seconds
         self.STATE_CHANGING = False
+        self.calibration_total = 0
+        self.calibration_avg_count = 0
+        self.calibration_avg = 0
+
+        euroFilterConfig = {
+                'freq': 100,       # Hz
+                'mincutoff': 1.0,  # Hz
+                'beta': 0.1,       
+                'dcutoff': 1.0    
+                }
+        self.filter = OneEuroFilter(**euroFilterConfig)
+        self.total_data_count = 0
 
         self.soundDir = "Sounds/"
 
         self.stepMS = 10    # 100 Hz sampling
         self.N_VALUES = self.stepMS * 100 
-        self.time_start = 0
-        self.AVG_WAIT = 0   # TODO RM ?
         self.avg_last_sec = 0
 
         # Start dummy data for plot to have line at start
@@ -67,36 +78,22 @@ class PlotWindow(QMainWindow):
         self.y_top = 0
         self.y_bottom = 0
 
+        self.waitForUser()
         self.initUI()
 
     def set_phase(self, phase): 
         self.PHASE = phase
-        # TODO phase change logging
+        # TODO phase change logging, with enum to string
 
-    def _calibration(self, num_actions=3):  # TODO RM
-        open_values = []
-        closed_values = []
-        for _ in range(num_actions):
-            action_close = "Please close your fist, press Enter when done"
-            closed_values.append(self.record_action(action_close, is_open=False))
-
-            action_open = "Please open your fist, press Enter when done"
-            open_values.append(self.record_action(action_open, is_open=True))
-        return open_values, closed_values
-
-    def record_action(self, action_name, is_open): # TODO RM
-        message = (f'<p style="font-size:20px; font-weight:bold;\
-            color:{"green" if is_open else "red"}">'
-            f'{"OPEN" if is_open else "CLOSE"} your fist</p>'
-            f'<p>{action_name}</p>')
+    def waitForUser(self):
+        message = "Press ok when ready !"
         msg_box = QMessageBox()
-        msg_box.setWindowTitle("User Action - Calibration Phase")
+        msg_box.setWindowTitle("User Action - Device check")
         RICH_TEXT_FORMAT = 1
         msg_box.setTextFormat(RICH_TEXT_FORMAT)
         msg_box.setText(message)
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec_()
-        return self.get_value()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
@@ -164,11 +161,12 @@ class PlotWindow(QMainWindow):
         return self.new_value
 
     def update_data(self, value):
-        # TODO 1euro filter denoising
+        filtered_value = self.filter(value, 0.001 * self.total_data_count)
         self.data_y = self.data_y[1:]  # Remove first element
-        self.data_y.append(value)
+        self.data_y.append(filtered_value)
         self.avg_last_sec_last_sec = np.mean(self.data_y)
-        self.LOGGING_DATA.append(value)
+        self.total_data_count += 1
+        self.LOGGING_DATA.append(value) # Log raw values to be able to replay filtering differently
 
     def update_plot(self):
         self.curve.setData(self.data_x, self.data_y)
@@ -230,7 +228,7 @@ class PlotWindow(QMainWindow):
                 self.NEW_STATE = self.avg_last_sec # Still changing
                 self.NEW_STATE_START_TIME = time.time()
             else:
-                STABILIZED = time.time() - self.NEW_STATE_START_TIME >= self.NEW_STABLE_STATE_TIME_WINDOW:
+                STABILIZED = time.time() - self.NEW_STATE_START_TIME >= self.NEW_STABLE_STATE_TIME_WINDOW
                 if STABILIZED:
                     self.triggered()
         else: # Still in range of original stable state
