@@ -2,7 +2,7 @@
 # Targeted Dream Incubation client code
 # Author: Alexis Dumelié
 #
-# Code prototyping aided by LLM
+# Note: Code prototyping aided by LLM
 # Final code: Alexis Dumelié
 """
 #----------------------------------------
@@ -22,7 +22,9 @@ from pydub import AudioSegment
 from pydub.playback import play
 #----------------------------------------
 from DEBUG_ENUM import NORMAL, DEBUG_DUMMY, DEBUG_REPLAY
+from PHASES_ENUM import CALIBRATION, RUNNING, DETECTED, PROMPTING, RECORDING
 from Datacollector import DataCollector
+LIVE = False 
 #----------------------------------------
 class PlotWindow(QMainWindow):
     def __init__(self, debug_level=0, replay_file=None):
@@ -31,6 +33,7 @@ class PlotWindow(QMainWindow):
         self.DEBUG = debug_level
         self.LOG_FILE = "LOGS/" + str(datetime.now()).replace(" ", "_")
         self.LOGGING_DATA = []
+        self.PHASE = CALIBRATION
 
         self.soundDir = "Sounds/"
 
@@ -44,7 +47,7 @@ class PlotWindow(QMainWindow):
         self.data_x = list(range(self.N_VALUES))
         self.data_y = [0 for _ in self.data_x]
 
-        self.TRIGGERED = False
+        self.TRIGGERED = False  # TODO move to using phase attribute
         self.BAUD_RATE = 9600
         self._serial_setup()
 
@@ -59,12 +62,16 @@ class PlotWindow(QMainWindow):
         self.mean_closed =np.mean(closed_values)
         self.std_open = np.std(open_values)
         self.std_closed = np.std(closed_values)
-        range_factor = 0.9
+        range_factor = 0
         self.y_top = self.mean_closed - range_factor * self.std_closed
         self.y_bottom = self.mean_open - range_factor * self.std_open
 
 
         self.initUI()
+
+    def set_phase(self, phase): # TODO add enum type ?
+        self.PHASE = phase
+        # TODO phase change logging
 
     def _calibration(self, num_actions=3):
         open_values = []
@@ -177,18 +184,20 @@ class PlotWindow(QMainWindow):
             self.curve.setPen(pg.mkPen(color='g'))
 
     def check_for_trigger(self, values):
-        if not self.TRIGGERED:
-            self.average = sum(values) / len(values)
-            # Allow the first N values to elapse before checking
-            if len(self.LOGGING_DATA) > self.N_VALUES:
-                if self.average <= self.y_bottom: # If under y_bottom for x seconds
-                    self.time_start = time.time()
-                    if time.time() - self.time_start >= self.AVG_WAIT:
-                        self.triggered()
-                        self.TRIGGERED = True
+        if LIVE:
+            if not self.TRIGGERED:
+                self.average = sum(values) / len(values)
+                # Allow the first N values to elapse before checking
+                if len(self.LOGGING_DATA) > self.N_VALUES:
+                    if self.average < self.y_bottom: # If under y_bottom for x seconds
+                        self.time_start = time.time()
+                        if time.time() - self.time_start >= self.AVG_WAIT:
+                            self.triggered()
+                            self.TRIGGERED = True
 
     def triggered(self):
         # TODO: recording and dormio cycles
+        # WIP
         print("Detected !")
         self.LOGGING_DATA.append("DETECTED")
 
