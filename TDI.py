@@ -18,9 +18,6 @@ from OneEuroFilter import OneEuroFilter
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
-
-from pydub import AudioSegment
-from pydub.playback import play
 #----------------------------------------
 from DEBUG_ENUM import DebugLevel
 from PHASES_ENUM import Phases
@@ -54,8 +51,6 @@ class PlotWindow(QMainWindow):
                 }
         self.filter = OneEuroFilter(**euroFilterConfig)
         self.total_data_count = 0
-
-        self.soundDir = "Sounds/"
 
         self.stepMS = 10    # 100 Hz sampling
         self.N_VALUES = self.stepMS * 100 
