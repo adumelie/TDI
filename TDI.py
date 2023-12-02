@@ -1,9 +1,6 @@
 """
 # Targeted Dream Incubation client code
 # Author: Alexis Dumelié
-#
-# Note: Code prototyping aided by LLM
-# Final code: Alexis Dumelié
 """
 #----------------------------------------
 import time
@@ -33,7 +30,7 @@ class PlotWindow(QMainWindow):
         self.LOGGING_DATA = []
         self.PHASE = Phases.CALIBRATION
         self.START_TIME = time.time()
-        self.CALIBRATION_PERIOD = 90 # 1.5 min
+        self.CALIBRATION_PERIOD = 10 #90 # 1.5 min
         self.STABLE_STATE = 0
         self.NEW_STATE = 0
         self.NEW_STATE_START_TIME = 0
@@ -79,10 +76,17 @@ class PlotWindow(QMainWindow):
     def set_recorder(self):
         self.recorder = Recorder()
         self.recorder.finished_signal.connect(self.reset_trigger)
+        self.recorder.log_send.connect(self.log_tdi)
+
+    def log_tdi(self, log_record):
+        self.LOGGING_DATA.append(log_record)
         
     def reset_trigger(self):
         self.set_recorder()
         self.TRIGGERED = False
+        self.STABLE_STATE = self.calibration_avg
+        self.NEW_STATE = 0
+        self.STATE_CHANGING = False
 
     def set_phase(self, phase): 
         self.PHASE = phase
@@ -149,9 +153,6 @@ class PlotWindow(QMainWindow):
         self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
 
-        # Detection threshold lines for visual reference
-        self.plot.addLine(y=self.calibration_avg, pen=pg.mkPen('y'))
-
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(self.stepMS)
@@ -174,7 +175,7 @@ class PlotWindow(QMainWindow):
         filtered_value = self.filter(value, 0.001 * self.total_data_count)
         self.data_y = self.data_y[1:]  # Remove first element
         self.data_y.append(filtered_value)
-        self.avg_last_sec_last_sec = np.mean(self.data_y)
+        self.avg_last_sec = np.mean(self.data_y)
         self.total_data_count += 1
         self.LOGGING_DATA.append(value) # Log raw values to be able to replay filtering differently
 
@@ -182,24 +183,28 @@ class PlotWindow(QMainWindow):
         self.curve.setData(self.data_x, self.data_y)
         if self.avg_last_sec is not None:
             self.avg_text_item.setText(f"Average: {self.avg_last_sec:.2f}")
+        if self.PHASE == Phases.CALIBRATION:
+            self.curve.setPen(pg.mkPen(color='y'))
+        else:
+            self.curve.setPen(pg.mkPen(color='r'))
         if self.TRIGGERED:
             self.curve.setPen(pg.mkPen(color='g'))
     #---------------
     def update(self):
         value = self.get_value()
         self.update_data(value)
-        self.check_for_trigger()
-
         if self.PHASE == Phases.CALIBRATION:
             if time.time() - self.START_TIME >= self.CALIBRATION_PERIOD:
                 self.STABLE_STATE = self.calibration_avg
+                self.plot.addLine(y=self.calibration_avg, pen=pg.mkPen('y'))
                 self.set_phase(Phases.RUNNING)
             else:
                 # Running average update
                 self.calibration_total += value
                 self.calibration_avg_count += 1
                 self.calibration_avg = self.calibration_total / self.calibration_avg_count
-
+        else:
+            self.check_for_trigger()
         self.update_plot()
 
     def check_for_trigger(self):
@@ -227,13 +232,14 @@ class PlotWindow(QMainWindow):
         if self.TRIGGERED:
             return # Ignore checking if already in triggered state
 
-        sensory_repeatability = 0.02 
-        state_change_range = 0.1
+        sensor_repeatability = 0.02 
+        state_change_range = 0.05 if not self.STATE_CHANGING else 0.03
         delta_percent = sensor_repeatability + state_change_range
-        original_upper_bound_stable = self.STABLE_STATE * (1 + delta_percent) 
 
         if self.STATE_CHANGING:
+            # TODO what if we go back down ?
             changing_state_upper_bound = self.NEW_STATE * (1 + delta_percent)
+            print("DEBUG: STATE CHANGING + {0}".format(changing_state_upper_bound))  # RM
             if self.avg_last_sec >= changing_state_upper_bound:
                 self.NEW_STATE = self.avg_last_sec # Still changing
                 self.NEW_STATE_START_TIME = time.time()
@@ -242,7 +248,9 @@ class PlotWindow(QMainWindow):
                 if STABILIZED:
                     self.triggered()
         else: # Still in range of original stable state
+            original_upper_bound_stable = self.STABLE_STATE * (1 + delta_percent) 
             if self.avg_last_sec >= original_upper_bound_stable:
+                print("-"*50 + " DEBUG: STATE Original past")  # RM
                 self.STATE_CHANGING = True
                 self.NEW_STATE = self.avg_last_sec
                 self.NEW_STATE_START_TIME = time.time()
@@ -267,7 +275,8 @@ def main():
     elif len(sys.argv) > 3:
         print("Usage: python your_script.py <debug_level> [<replay_file>]")
         sys.exit(1)
-    LIVE = False    # False if DRY RUN --> NO DETECTION
+    # False if DRY RUN --> NO DETECTION
+    LIVE = True
     app = QApplication(sys.argv)
     window = PlotWindow(debug_level, replay_file, LIVE)
     window.show()
