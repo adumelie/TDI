@@ -24,11 +24,7 @@ class Recorder(QThread):
     def run(self):
         print("Allowing 3 min of sleep...")
         self.log_send.emit("Sleep period")
-        # time.sleep(60*3)    # Sleep for predefined amount
-
-        # DEBUG
-        time.sleep(5)
-        self.finished_signal.emit() # RM
+        time.sleep(60*3)    # Sleep for predefined amount
 
         sound = AudioSegment.from_file(self.soundDir + 'prompt_1.wav', format='wav')
         play(sound) # "[Name] You are falling asleep"

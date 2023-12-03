@@ -243,7 +243,7 @@ class PlotWindow(QMainWindow):
         if self.TRIGGERED:
             return # Ignore checking if already in triggered state
         if self.GRACE:
-            print("GRACE {0}".format(time.time())) # RM
+            print("Grace {0}".format(time.time())) # RM
             return # After closing hand again small grace period of checking
 
         sensor_repeatability = 0.02 
@@ -264,7 +264,6 @@ class PlotWindow(QMainWindow):
         else: # Still in range of original stable state
             original_upper_bound_stable = self.STABLE_STATE * (1 + delta_percent) 
             if self.avg_last_sec >= original_upper_bound_stable:
-                print("-"*50 + " DEBUG: STATE Original past")  # RM
                 self.STATE_CHANGING = True
                 self.NEW_STATE = self.avg_last_sec
                 self.NEW_STATE_START_TIME = time.time()
