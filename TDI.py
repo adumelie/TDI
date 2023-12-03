@@ -36,6 +36,9 @@ class PlotWindow(QMainWindow):
         self.NEW_STATE_START_TIME = 0
         self.NEW_STABLE_STATE_TIME_WINDOW = 10 # seconds
         self.STATE_CHANGING = False
+        self.GRACE_PERIOD_START = 0 
+        self.GRACE = False
+        self.GRACE_WINDOW = 10
         self.calibration_total = 0
         self.calibration_avg_count = 0
         self.calibration_avg = 0
@@ -68,25 +71,30 @@ class PlotWindow(QMainWindow):
         self.new_value = 0
 
         self.recorder = None
+        self.cycle = 0
         self.set_recorder()
 
         self.waitForUser()
         self.initUI()
 
     def set_recorder(self):
-        self.recorder = Recorder()
+        self.recorder = Recorder(self.cycle)
         self.recorder.finished_signal.connect(self.reset_trigger)
         self.recorder.log_send.connect(self.log_tdi)
 
     def log_tdi(self, log_record):
         self.LOGGING_DATA.append(log_record)
         
-    def reset_trigger(self):
-        self.set_recorder()
-        self.TRIGGERED = False
+    def reset_trigger(self):    # Called on Recorder termination
+        self.cycle += 1
         self.STABLE_STATE = self.calibration_avg
         self.NEW_STATE = 0
+        self.NEW_STATE_START_TIME = 0
         self.STATE_CHANGING = False
+        self.GRACE_PERIOD_START = time.time()
+        self.GRACE = True
+        self.set_recorder()
+        self.TRIGGERED = False
 
     def set_phase(self, phase): 
         self.PHASE = phase
@@ -227,10 +235,16 @@ class PlotWindow(QMainWindow):
             If we have been here for long enough then this is a NEW STABLE state
             Hence we have achieved detection !
         """
+        if time.time() - self.GRACE_PERIOD_START >= self.GRACE_WINDOW:
+            self.GRACE = False
+
         if not self.LIVE:
             return  # Ignore checking when dry run
         if self.TRIGGERED:
             return # Ignore checking if already in triggered state
+        if self.GRACE:
+            print("GRACE {0}".format(time.time())) # RM
+            return # After closing hand again small grace period of checking
 
         sensor_repeatability = 0.02 
         state_change_range = 0.05 if not self.STATE_CHANGING else 0.03

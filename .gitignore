@@ -1,4 +1,7 @@
 LOGS/
+REC/
+recorded_prompts/
+PROMPTS/
 PROTOTYPE_ARCHIVES/
 
 # Byte-compiled / optimized / DLL files

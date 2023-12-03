@@ -45,7 +45,7 @@ prompt = "Spoon"
 prompts = ["[Your NAME], You are falling asleep",
            "Please tell me what is going on through your mind ?",
            "Remember to think of {0}".format(prompt),
-           "You can fall back asleep now",
+           "You can fall back asleep now, close your hand on the glove again",
            "You can wake up fully"]
 
 for i, prompt in enumerate(prompts):
