@@ -30,7 +30,7 @@ class PlotWindow(QMainWindow):
         self.LOGGING_DATA = []
         self.PHASE = Phases.CALIBRATION
         self.START_TIME = time.time()
-        self.CALIBRATION_PERIOD = 10 #90 # 1.5 min
+        self.CALIBRATION_PERIOD = 30 #90 # 1.5 min
         self.STABLE_STATE = 0
         self.NEW_STATE = 0
         self.NEW_STATE_START_TIME = 0

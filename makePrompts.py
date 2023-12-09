@@ -18,13 +18,6 @@ def save_audio(audio_signal, output_file, sample_rate=44100):
         wf.setframerate(sample_rate)
         wf.writeframes(audio_signal.tobytes())
 
-# def record_and_save(prompt, output_folder, index, duration=5):
-#     print(f"\t\tPrompt {index + 1}: {prompt}")
-#     audio_signal = record_audio(duration)
-#     output_file = os.path.join(output_folder, f'prompt_{index + 1}.wav')
-#     save_audio(audio_signal, output_file)
-#     print(f"Audio saved to {output_file}")
-
 def record_and_save(prompt, output_folder, index, duration=5, reduction_strength=0.95):
     print(f"\t\tPrompt {index + 1}: {prompt}")
     audio_signal = record_audio(duration)

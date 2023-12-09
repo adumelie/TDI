@@ -35,7 +35,7 @@ class Recorder(QThread):
         self.log_send.emit("Prompt 2")
         filename = "cycle_" + str(self.cycle)
         output_file = self.output_folder + filename
-        duration = 10 #60
+        duration = 60
         self.log_send.emit("Recording...")
         response = self.record_audio(duration)
         self.save_audio(response, output_file)
