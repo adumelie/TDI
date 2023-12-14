@@ -30,11 +30,11 @@ def record_and_save(prompt, output_folder, index, duration=5, reduction_strength
     save_audio(denoised_audio, output_file)
     print(f"Denoised audio saved to {output_file}")
 #----------------------------------------
-record_duration = 5 # seconds
+record_duration = 10 # seconds
 output_folder = 'recorded_prompts'
 os.makedirs(output_folder, exist_ok=True)
 
-prompt = "Spoon"
+prompt = "Trees"
 prompts = ["[Your NAME], You are falling asleep",
            "Please tell me what is going on through your mind ?",
            "Remember to think of {0}".format(prompt),

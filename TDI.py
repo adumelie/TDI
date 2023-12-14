@@ -247,7 +247,7 @@ class PlotWindow(QMainWindow):
             return # After closing hand again small grace period of checking
 
         sensor_repeatability = 0.02 
-        state_change_range = 0.05 if not self.STATE_CHANGING else 0.03
+        state_change_range = 0.03 if not self.STATE_CHANGING else 0.015
         delta_percent = sensor_repeatability + state_change_range
 
         if self.STATE_CHANGING:
