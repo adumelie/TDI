@@ -290,6 +290,7 @@ def main():
         sys.exit(1)
     # False if DRY RUN --> NO DETECTION
     LIVE = True
+    print("LIVE: ", LIVE)
     app = QApplication(sys.argv)
     window = PlotWindow(debug_level, replay_file, LIVE)
     window.show()
