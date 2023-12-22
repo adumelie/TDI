@@ -59,6 +59,7 @@ class PlotWindow(QMainWindow):
         # Start dummy data for plot to have line at start
         self.data_x = list(range(self.N_VALUES))
         self.data_y = [0 for _ in self.data_x]
+        self.data_y_raw = [0 for _ in self.data_x]
         # Data_y has values over last 1 second
 
         self.TRIGGERED = False 
@@ -157,6 +158,7 @@ class PlotWindow(QMainWindow):
         self.plot.setLabel(XAXIS, "Time (update " + str(self.stepMS) + " ms)")
         self.plot.setTitle("Input data - FSR Glove")
         self.curve = self.plot.plot(pen=pg.mkPen(color='r'), width=15)
+        self.curve_raw = self.plot.plot(pen=pg.mkPen(color='b'), width=10)
 
         self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
         self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
@@ -182,6 +184,8 @@ class PlotWindow(QMainWindow):
     def update_data(self, value):
         filtered_value = self.filter(value, 0.001 * self.total_data_count)
         self.data_y = self.data_y[1:]  # Remove first element
+        self.data_y_raw = self.data_y_raw[1:]
+        self.data_y_raw.append(value)
         self.data_y.append(filtered_value)
         self.avg_last_sec = np.mean(self.data_y)
         self.total_data_count += 1
@@ -189,8 +193,9 @@ class PlotWindow(QMainWindow):
 
     def update_plot(self):
         self.curve.setData(self.data_x, self.data_y)
+        self.curve_raw.setData(self.data_x, self.data_y_raw)
         if self.avg_last_sec is not None:
-            self.avg_text_item.setText(f"Average: {self.avg_last_sec:.2f}")
+            self.avg_text_item.setText(f"Average: {self.avg_last_sec:.3f}, AVG_T {np.mean(self.data_y):.3f}")
         if self.PHASE == Phases.CALIBRATION:
             self.curve.setPen(pg.mkPen(color='y'))
         else:
@@ -206,6 +211,7 @@ class PlotWindow(QMainWindow):
                 self.STABLE_STATE = self.calibration_avg
                 self.plot.addLine(y=self.calibration_avg, pen=pg.mkPen('y'))
                 self.set_phase(Phases.RUNNING)
+                self.LOGGING_DATA.append("CAL_AVG: {0}".format(self.STABLE_STATE))
             else:
                 # Running average update
                 self.calibration_total += value
@@ -247,7 +253,7 @@ class PlotWindow(QMainWindow):
             return # After closing hand again small grace period of checking
 
         sensor_repeatability = 0.02 
-        state_change_range = 0.03 if not self.STATE_CHANGING else 0.015
+        state_change_range = 0.015
         delta_percent = sensor_repeatability + state_change_range
 
         if self.STATE_CHANGING:
