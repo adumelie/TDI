@@ -23,7 +23,7 @@ def record_and_save(prompt, output_folder, index, duration=5, reduction_strength
     audio_signal = record_audio(duration)
     denoised_audio = nr.reduce_noise(
         y=audio_signal,
-        sr=44100,   # TODO constant
+        sr=44100, 
         prop_decrease=reduction_strength
     )
     output_file = os.path.join(output_folder, f'prompt_{index + 1}.wav')
@@ -40,6 +40,14 @@ prompts = ["[Your NAME], You are falling asleep",
            "Remember to think of {0}".format(prompt),
            "You can fall back asleep now, close your hand on the glove again",
            "You can wake up fully"]
+
+## Comment or uncomment based on language going to be used
+# prompt = "Arbres"
+# prompts = ["[Votre NOM], tu t'endors",
+#            "Dis moi, que te passe il par la tete ?",
+#            "N'oublie pas de penser aux {0}".format(prompt),
+#            "Tu peu te rendormir maintenant, referme ta main sur le gant",
+#            "Tu peu te réveiller complètement"]
 
 for i, prompt in enumerate(prompts):
     record_and_save(prompt, output_folder, i, record_duration)

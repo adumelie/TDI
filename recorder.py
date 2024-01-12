@@ -41,6 +41,7 @@ class Recorder(QThread):
         self.save_audio(response, output_file)
         self.log_send.emit("Saving audio...")
 
+        # Comment or uncomment this block based on control group of live group
         sound = AudioSegment.from_file(self.soundDir + 'prompt_3.wav', format='wav')
         play(sound) # "Remember to think of [PROMPT]"
         self.log_send.emit("Prompt 3")
