@@ -33,8 +33,8 @@ def print_tfidf_results(file_name, results):
         print(f"{text}:")
         # Print only the top 20 terms
         for idx, (term, score) in enumerate(tfidf_values.items()):
-            if idx == 20:
-                break
+            # if idx == 20:
+            #     break
             print(f"  {term}: {score:.4f}")
         print()
 

@@ -54,7 +54,7 @@ time_in_minutes = time_in_ms / (1000 * 60)
 final_min = time_in_minutes[-1]
 
 
-max_index = np.argmax(data[:-100]) # Ignoring end spike
+max_index = np.argmax(data[:-120]) # Ignoring end spike
 max_time_in_minutes = time_in_minutes[max_index]
 
 print("Index where data is maximum:", max_index)
@@ -66,7 +66,7 @@ plt.axvline(x=max_time_in_minutes, color='red', linestyle='--', label='Max Data 
 plt.xticks(np.arange(0, max(time_in_minutes) + 1, 5))
 
 avg = cal_avg
-user = file.split("/")[0]
+user = file.split("USERS")[1].split("/")[1]
 
 # FROM TDI code
 sensor_repeatability = 0.02 
@@ -92,7 +92,7 @@ x_point = final_min
 plt.text(x_point, avg*0.9, 'End', color='black') # Place end marker near end
 
 plt.legend()
-plt.savefig(file + "Data.png")
+plt.savefig(file + "-User" + user + "-Data.png")
 plt.show()
 
 
