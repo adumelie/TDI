@@ -12,25 +12,6 @@ def custom_tokenizer(text):
     # Treating appostrophes correctly
     return re.findall(r"\b[a-zA-Z0-9]+(?:'\w+)?\b", text)
 
-# def perform_tfidf(agglomerated_pre, agglomerated_post):
-#     final_stopwords_list = stopwords.words('english') + stopwords.words('french')
-#     all_texts = agglomerated_pre + agglomerated_post
-
-#     vectorizer = TfidfVectorizer(tokenizer=custom_tokenizer, stop_words=final_stopwords_list)
-
-#     tfidf_matrix = vectorizer.fit_transform(all_texts)
-#     feature_names = vectorizer.get_feature_names_out()
-#     results = {}
-#     for i, (pre_text, post_text) in enumerate(zip(agglomerated_pre, agglomerated_post)):
-#         combined_text = pre_text + post_text
-#         feature_index = tfidf_matrix[i, :].nonzero()[1]
-#         tfidf_scores = zip(feature_index, [tfidf_matrix[i, x] for x in feature_index])
-#         tfidf_values = {feature_names[i]: score for i, score in tfidf_scores}
-#         # Sort the terms by TF-IDF score in descending order
-#         sorted_tfidf_values = {k: v for k, v in sorted(tfidf_values.items(), key=lambda item: item[1], reverse=True)}
-#         results[f"Text {i + 1}"] = sorted_tfidf_values
-#     return results
-
 def perform_tfidf(texts):
     final_stopwords_list = stopwords.words('english') + stopwords.words('french')
     vectorizer = TfidfVectorizer(tokenizer=custom_tokenizer, stop_words=final_stopwords_list)
