@@ -51,12 +51,12 @@ for file_path in file_paths:
     agglomerated_pre.append(paragraphs[0].strip())
     agglomerated_post.append(paragraphs[1].strip())
     
-print(agglomerated_pre)
-print(agglomerated_post)
+# print(agglomerated_pre)
+# print(agglomerated_post)
 pre_str = " ".join(agglomerated_pre)
 post_str = " ".join(agglomerated_post)
-print(pre_str)
-print(post_str)
+# print(pre_str)
+# print(post_str)
 texts = [pre_str, post_str]
 
 # tfidf_results = perform_tfidf(agglomerated_pre, agglomerated_post)
