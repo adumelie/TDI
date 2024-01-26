@@ -106,6 +106,7 @@ x_point = final_min
 plt.text(x_point, avg*0.9, 'End', color='black') # Place end marker near end
 
 plt.legend()
+plt.ylim(0.45, 0.75)
 plt.savefig(file + "-User" + user + "-Data.png")
 print(SHOW)
 if SHOW:
