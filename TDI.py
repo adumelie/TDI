@@ -1,5 +1,5 @@
 """
-# Targeted Dream Incubation client code
+# Targeted Dream Incubation client code prototype
 # Author: Alexis Dumelié
 """
 #----------------------------------------
@@ -161,7 +161,7 @@ class PlotWindow(QMainWindow):
         self.curve_raw = self.plot.plot(pen=pg.mkPen(color='b'), width=10)
 
         self.avg_text_item = pg.TextItem("", anchor=(0, 0), color='w', border='b')
-        self.plot.addItem(self.avg_text_item) # TODO: anchor not working as expected (MINOR)
+        self.plot.addItem(self.avg_text_item) # anchor not working as expected (MINOR)
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
@@ -257,9 +257,9 @@ class PlotWindow(QMainWindow):
         delta_percent = sensor_repeatability + state_change_range
 
         if self.STATE_CHANGING:
-            # TODO what if we go back down ?
+            # NOTE: What if we go back down ?
             changing_state_upper_bound = self.NEW_STATE * (1 + delta_percent)
-            print("DEBUG: STATE CHANGING + {0}".format(changing_state_upper_bound))  # RM
+            # print("DEBUG: STATE CHANGING + {0}".format(changing_state_upper_bound))
             if self.avg_last_sec >= changing_state_upper_bound:
                 self.NEW_STATE = self.avg_last_sec # Still changing
                 self.NEW_STATE_START_TIME = time.time()

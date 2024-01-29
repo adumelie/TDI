@@ -1,4 +1,4 @@
-# Itsybitsy board cod (FSR TDI)
+# Itsybitsy board code (FSR/FLEX TDI)
 # Author: Alexis Dumelié
 
 import time

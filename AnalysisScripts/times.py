@@ -13,7 +13,7 @@ def convert_to_time_format(decimal_time):
     seconds = int(total_seconds % 60)
     return f"{sign}{minutes:02d}:{seconds:02d}"
 
-# RAW data
+# RAW data (writing times)
 pre = [
         1.33,   # 0
         2.41,   # 1
